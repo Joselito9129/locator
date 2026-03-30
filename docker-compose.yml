@@ -1,0 +1,45 @@
+version: '3.9'
+
+services:
+  db:
+    image: mariadb:10.11
+    container_name: gta-db
+    environment:
+      MYSQL_DATABASE: gta
+      MYSQL_USER: gta
+      MYSQL_PASSWORD: gta2026!Secure
+      MYSQL_ROOT_PASSWORD: Rootgta2026!
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - gta-net
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "-u", "root", "-pRootgta2026!", "ping", "-h", "127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gta-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mariadb://db:3306/gta
+      SPRING_DATASOURCE_USERNAME: gta
+      SPRING_DATASOURCE_PASSWORD: gta2026!Secure
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gta-net
+
+volumes:
+  db-data:
+
+networks:
+  gta-net:
