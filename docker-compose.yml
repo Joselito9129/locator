@@ -19,7 +19,7 @@ services:
 
   backend:
     build:
-      context: .
+      context: ./BackEnd_Locator
       dockerfile: Dockerfile
     container_name: gta-backend
     environment:
