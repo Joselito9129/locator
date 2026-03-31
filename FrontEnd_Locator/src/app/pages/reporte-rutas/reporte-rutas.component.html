@@ -1,0 +1,63 @@
+<div class="container-page">
+  <div class="page-header">
+    <h5>Reporte de rutas</h5>
+  </div>
+
+  <div class="card-theme">
+    @if (state$ | async; as state) {
+      <div class="card-theme-header">
+        <div class="title">
+          <h4>Consulta de guías</h4>
+          <p>Seguimiento de salidas y estatus estimado</p>
+        </div>
+
+        <button class="btn-theme" type="button" (click)="loadRutas()">
+          Recargar
+        </button>
+      </div>
+
+      @if (state.loading) {
+        <div class="state-box loading">
+          Cargando información...
+        </div>
+      }
+
+      @if (!state.loading && state.errorMessage) {
+        <div class="state-box error">
+          {{ state.errorMessage }}
+        </div>
+      }
+
+      @if (!state.loading && !state.errorMessage && state.rutas.length === 0) {
+        <div class="state-box empty">
+          No existen registros para mostrar.
+        </div>
+      }
+
+      @if (!state.loading && !state.errorMessage && state.rutas.length > 0) {
+        <div class="table-theme-wrapper">
+          <table class="table-theme">
+            <thead>
+              <tr>
+                <th>Tienda</th>
+                <th>Hora salida centro de distribución</th>
+                <th>ETA</th>
+                <th>Número guía</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (ruta of state.rutas; track ruta.id) {
+                <tr>
+                  <td>{{ ruta.tienda }}</td>
+                  <td>{{ ruta.horaSalidaCentroDistribucion }}</td>
+                  <td>{{ ruta.eta }}</td>
+                  <td>{{ ruta.numeroGuia }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  </div>
+</div>

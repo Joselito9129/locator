@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class RutaGeoResponse extends GenericResponse {
+public class RutaGeoResponse {
 
     private Long id;
     private BigDecimal latitudOrigen;

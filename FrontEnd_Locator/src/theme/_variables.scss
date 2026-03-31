@@ -1,0 +1,26 @@
+$primary-color: #4099ff;
+$warning-color: #ffb64d;
+$danger-color: #ff5370;
+$success-color: #2ed8b6;
+$purple-color: #7759de;
+$info-color: #00bcd4;
+$secondary-color: #748892;
+
+$theme-border: #e2e5e8;
+
+$theme-font-family: 'Poppins', sans-serif;
+$theme-font-size: 14px;
+$theme-background: #f6f7fb;
+$theme-font-color: #222;
+$theme-heading-color: #222;
+
+$card-shadow: 0 1px 2.94px 0.06px rgba(4, 26, 55, 0.16);
+
+$border-radius: 5px;
+$transition-base: all 0.2s ease-in-out;
+
+$color-name: c-blue, c-red, c-green, c-yellow, c-purple;
+$color-color: $primary-color, $danger-color, $success-color, $warning-color, $purple-color;
+
+$color-bt-name: primary, danger, success, warning, info, purple;
+$color-bt-color: $primary-color, $danger-color, $success-color, $warning-color, $info-color, $purple-color;

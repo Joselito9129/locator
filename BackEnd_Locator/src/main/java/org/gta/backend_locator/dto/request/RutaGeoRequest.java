@@ -7,8 +7,7 @@ import java.math.BigDecimal;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class RutaGeoRequest extends GenericRequest {
+public class RutaGeoRequest {
 
     private BigDecimal latitudOrigen;
     private BigDecimal longitudOrigen;
