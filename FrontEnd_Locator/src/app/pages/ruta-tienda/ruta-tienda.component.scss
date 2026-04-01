@@ -1,0 +1,60 @@
+.ruta-tienda__header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ruta-tienda__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.ruta-tienda__form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.ruta-tienda__field {
+  display: grid;
+  gap: 6px;
+}
+
+.ruta-tienda__field input,
+.ruta-tienda__field select {
+  width: 100%;
+}
+
+.ruta-tienda__form-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ruta-tienda__error {
+  display: block;
+  font-size: 12px;
+}
+
+.ruta-tienda__table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ruta-tienda__row--selected {
+  font-weight: 600;
+}
+
+.ruta-tienda__inner-card {
+  margin: 0;
+}
+
+@media (min-width: 1024px) {
+  .ruta-tienda__grid {
+    grid-template-columns: 360px 1fr;
+    align-items: start;
+  }
+}

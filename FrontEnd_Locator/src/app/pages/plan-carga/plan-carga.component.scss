@@ -1,0 +1,28 @@
+.plan-carga__header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.plan-carga__detail-row td {
+  background: #fafafa;
+}
+
+.plan-carga__detail-box {
+  padding: 16px;
+}
+
+.plan-carga__detail-box h4 {
+  margin: 0 0 12px 0;
+}
+
+.state-ok {
+  border-left: 4px solid #2e7d32;
+}
+
+.state-warning {
+  border-left: 4px solid #ed6c02;
+}
+
+.state-error {
+  border-left: 4px solid #d32f2f;
+}

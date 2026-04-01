@@ -1,0 +1,215 @@
+<div class="container-page">
+  <div class="page-header">
+    <h2>Mantenimiento de rutas por tienda</h2>
+
+    <div class="ruta-tienda__header-actions">
+      <button type="button" class="btn-theme" (click)="refresh()">Refrescar</button>
+      <button type="button" class="btn-theme" (click)="resetRutaForm()">Nueva ruta</button>
+    </div>
+  </div>
+
+  <div class="ruta-tienda__grid">
+    <div class="card-theme">
+      <div class="card-theme-header">
+        Datos de ruta
+      </div>
+
+      <form class="ruta-tienda__form" [formGroup]="routeForm" (ngSubmit)="saveRuta()">
+        <div class="ruta-tienda__field">
+          <label for="tiendaId">Tienda ID</label>
+          <input id="tiendaId" type="number" formControlName="tiendaId" />
+          @if (isInvalid('tiendaId', 'ruta')) {
+            <small class="ruta-tienda__error">Tienda ID es requerido y debe ser mayor a 0.</small>
+          }
+        </div>
+
+        <div class="ruta-tienda__field">
+          <label for="rutaEstado">Estado</label>
+          <select id="rutaEstado" formControlName="estado">
+            <option value="ACTIVO">ACTIVO</option>
+            <option value="INACTIVO">INACTIVO</option>
+          </select>
+          @if (isInvalid('estado', 'ruta')) {
+            <small class="ruta-tienda__error">Estado es requerido.</small>
+          }
+        </div>
+
+        <div class="ruta-tienda__field">
+          <label for="rutaUsuarioAccion">
+            {{ editingRutaId ? 'Usuario actualización' : 'Usuario creación' }}
+          </label>
+          <input id="rutaUsuarioAccion" type="text" formControlName="usuarioAccion" />
+          @if (isInvalid('usuarioAccion', 'ruta')) {
+            <small class="ruta-tienda__error">Usuario es requerido.</small>
+          }
+        </div>
+
+        <div class="ruta-tienda__form-actions">
+          <button type="submit" class="btn-theme">
+            {{ editingRutaId ? 'Actualizar ruta' : 'Guardar ruta' }}
+          </button>
+
+          <button type="button" class="btn-theme" (click)="resetRutaForm()">
+            Limpiar
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card-theme">
+      <div class="card-theme-header">
+        Rutas registradas
+      </div>
+
+      @if (rutasState$ | async; as rutasState) {
+        @if (rutasState.loading) {
+          <div class="state-box">Cargando rutas...</div>
+        } @else if (rutasState.errorMessage) {
+          <div class="state-box">{{ rutasState.errorMessage }}</div>
+        } @else if (!rutasState.data.length) {
+          <div class="state-box">No hay rutas registradas.</div>
+        } @else {
+          <div class="table-theme-wrapper">
+            <table class="table-theme">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Tienda</th>
+                  <th>Estado</th>
+                  <th>Creación</th>
+                  <th>Actualización</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (ruta of rutasState.data; track ruta.id) {
+                  <tr [class.ruta-tienda__row--selected]="selectedRutaIdValue === ruta.id">
+                    <td>{{ ruta.id }}</td>
+                    <td>{{ ruta.tiendaId }}</td>
+                    <td>{{ ruta.estado }}</td>
+                    <td>{{ ruta.usuarioCreacion }} - {{ ruta.fechaCreacionLabel }}</td>
+                    <td>{{ ruta.usuarioActualizacion ?? '-' }} - {{ ruta.fechaActualizacionLabel }}</td>
+                    <td>
+                      <div class="ruta-tienda__table-actions">
+                        <button type="button" class="btn-theme" (click)="selectRuta(ruta)">Ver puntos</button>
+                        <button type="button" class="btn-theme" (click)="editRuta(ruta)">Editar</button>
+                        <button type="button" class="btn-theme" (click)="deleteRuta(ruta)">Eliminar</button>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+    </div>
+  </div>
+
+  <div class="card-theme">
+    <div class="card-theme-header">
+      Puntos de ruta
+    </div>
+
+    @if (!selectedRutaIdValue) {
+      <div class="state-box">Selecciona una ruta para administrar sus puntos.</div>
+    } @else {
+      <div class="ruta-tienda__grid">
+        <div class="card-theme ruta-tienda__inner-card">
+          <div class="card-theme-header">
+            {{ editingPuntoId ? 'Editar punto' : 'Nuevo punto' }}
+          </div>
+
+          <form class="ruta-tienda__form" [formGroup]="pointForm" (ngSubmit)="savePunto()">
+            <div class="ruta-tienda__field">
+              <label for="orden">Orden</label>
+              <input id="orden" type="number" formControlName="orden" />
+              @if (isPointInvalid('orden')) {
+                <small class="ruta-tienda__error">Orden es requerido y debe ser mayor a 0.</small>
+              }
+            </div>
+
+            <div class="ruta-tienda__field">
+              <label for="puntoEstado">Estado</label>
+              <select id="puntoEstado" formControlName="estado">
+                <option value="ACTIVO">ACTIVO</option>
+                <option value="INACTIVO">INACTIVO</option>
+              </select>
+              @if (isPointInvalid('estado')) {
+                <small class="ruta-tienda__error">Estado es requerido.</small>
+              }
+            </div>
+
+            <div class="ruta-tienda__field">
+              <label for="puntoUsuarioAccion">
+                {{ editingPuntoId ? 'Usuario actualización' : 'Usuario creación' }}
+              </label>
+              <input id="puntoUsuarioAccion" type="text" formControlName="usuarioAccion" />
+              @if (isPointInvalid('usuarioAccion')) {
+                <small class="ruta-tienda__error">Usuario es requerido.</small>
+              }
+            </div>
+
+            <div class="ruta-tienda__form-actions">
+              <button type="submit" class="btn-theme">
+                {{ editingPuntoId ? 'Actualizar punto' : 'Guardar punto' }}
+              </button>
+
+              <button type="button" class="btn-theme" (click)="resetPointForm()">
+                Limpiar
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card-theme ruta-tienda__inner-card">
+          <div class="card-theme-header">
+            Lista de puntos
+          </div>
+
+          @if (puntosState$ | async; as puntosState) {
+            @if (puntosState.loading) {
+              <div class="state-box">Cargando puntos...</div>
+            } @else if (puntosState.errorMessage) {
+              <div class="state-box">{{ puntosState.errorMessage }}</div>
+            } @else if (!puntosState.data.length) {
+              <div class="state-box">La ruta no tiene puntos registrados.</div>
+            } @else {
+              <div class="table-theme-wrapper">
+                <table class="table-theme">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Orden</th>
+                      <th>Estado</th>
+                      <th>Creación</th>
+                      <th>Actualización</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (punto of puntosState.data; track punto.id) {
+                      <tr>
+                        <td>{{ punto.id }}</td>
+                        <td>{{ punto.orden }}</td>
+                        <td>{{ punto.estado }}</td>
+                        <td>{{ punto.usuarioCreacion }} - {{ punto.fechaCreacionLabel }}</td>
+                        <td>{{ punto.usuarioActualizacion ?? '-' }} - {{ punto.fechaActualizacionLabel }}</td>
+                        <td>
+                          <div class="ruta-tienda__table-actions">
+                            <button type="button" class="btn-theme" (click)="editPunto(punto)">Editar</button>
+                            <button type="button" class="btn-theme" (click)="deletePunto(punto)">Eliminar</button>
+                          </div>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          }
+        </div>
+      </div>
+    }
+  </div>
+</div>

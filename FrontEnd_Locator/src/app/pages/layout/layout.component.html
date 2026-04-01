@@ -1,0 +1,49 @@
+<div class="app-shell">
+  <header class="app-shell__header card-theme">
+    <div class="app-shell__header-left">
+      <button
+        type="button"
+        class="btn-theme app-shell__menu-button"
+        (click)="toggleMenu()"
+        aria-label="Abrir menú">
+        ☰
+      </button>
+
+      <div class="page-header app-shell__page-header">
+        <h1>Logística / Rutas / ETA</h1>
+      </div>
+    </div>
+  </header>
+
+  <div
+    class="app-shell__overlay"
+    [class.app-shell__overlay--visible]="isMenuOpen()"
+    (click)="closeMenu()">
+  </div>
+
+  <aside
+    class="app-shell__sidebar card-theme"
+    [class.app-shell__sidebar--open]="isMenuOpen()">
+
+    <div class="card-theme-header">
+      Menú
+    </div>
+
+    <nav class="app-shell__nav">
+      @for (item of menuItems; track item.route) {
+        <a
+          class="app-shell__nav-link"
+          [routerLink]="item.route"
+          routerLinkActive="app-shell__nav-link--active"
+          [routerLinkActiveOptions]="{ exact: true }"
+          (click)="closeMenu()">
+          {{ item.label }}
+        </a>
+      }
+    </nav>
+  </aside>
+
+  <main class="app-shell__content">
+    <router-outlet />
+  </main>
+</div>

@@ -1,0 +1,107 @@
+<div class="container-page">
+  <div class="page-header">
+    <h2>Planificación de carga</h2>
+
+    <div class="plan-carga__header-actions">
+      <button type="button" class="btn-theme" (click)="refresh()">Refrescar</button>
+      <button type="button" class="btn-theme" (click)="generar()">Generar plan</button>
+    </div>
+  </div>
+
+  <div class="card-theme">
+    <div class="card-theme-header">
+      Camiones planificados
+    </div>
+
+    @if (state$ | async; as state) {
+      @if (state.loading) {
+        <div class="state-box">Cargando planificación...</div>
+      } @else if (state.errorMessage) {
+        <div class="state-box">{{ state.errorMessage }}</div>
+      } @else if (!state.data.length) {
+        <div class="state-box">No hay camiones planificados.</div>
+      } @else {
+        <div class="table-theme-wrapper">
+          <table class="table-theme">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Plan</th>
+                <th>Tipo</th>
+                <th>Capacidad peso</th>
+                <th>Peso actual</th>
+                <th>Capacidad volumen</th>
+                <th>Volumen actual</th>
+                <th>Ocupación</th>
+                <th>Estado BD</th>
+                <th>Estado visual</th>
+                <th>Detalle</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              @for (item of state.data; track trackById($index, item)) {
+                <tr>
+                  <td>{{ item.idPlanCamion }}</td>
+                  <td>{{ item.planId }}</td>
+                  <td>{{ item.tipoCamion }}</td>
+                  <td>{{ item.capacidadPeso }}</td>
+                  <td>{{ item.pesoActual }}</td>
+                  <td>{{ item.capacidadVolumen ?? '-' }}</td>
+                  <td>{{ item.volumenActual ?? '-' }}</td>
+                  <td>{{ (item.porcentajeOcupacion * 100) | number:'1.0-0' }}%</td>
+                  <td>{{ item.estado }}</td>
+                  <td>
+                    <span class="state-box" [ngClass]="getClass(item.estadoVisual)">
+                      {{ item.estadoVisual }}
+                    </span>
+                  </td>
+                  <td>
+                    <button type="button" class="btn-theme" (click)="toggleDetalle(item.idPlanCamion)">
+                      {{ isExpanded(item.idPlanCamion) ? 'Ocultar' : 'Ver tiendas' }}
+                    </button>
+                  </td>
+                </tr>
+
+                @if (isExpanded(item.idPlanCamion)) {
+                  <tr class="plan-carga__detail-row">
+                    <td colspan="11">
+                      <div class="plan-carga__detail-box">
+                        <h4>Tiendas asignadas</h4>
+
+                        @if (!item.tiendas.length) {
+                          <div class="state-box">No hay tiendas asignadas.</div>
+                        } @else {
+                          <div class="table-theme-wrapper">
+                            <table class="table-theme">
+                              <thead>
+                                <tr>
+                                  <th>Tienda</th>
+                                  <th>Peso asignado</th>
+                                  <th>Volumen asignado</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                @for (tienda of item.tiendas; track trackByTienda($index, tienda)) {
+                                  <tr>
+                                    <td>{{ tienda.tiendaId }}</td>
+                                    <td>{{ tienda.pesoAsignado }}</td>
+                                    <td>{{ tienda.volumenAsignado ?? '-' }}</td>
+                                  </tr>
+                                }
+                              </tbody>
+                            </table>
+                          </div>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  </div>
+</div>
