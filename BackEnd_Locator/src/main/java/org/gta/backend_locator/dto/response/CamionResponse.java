@@ -16,5 +16,6 @@ public class CamionResponse {
     public String tipoCamion;
     public BigDecimal porcentajeOcupacion;
     public BigDecimal pesoActual;
+    public BigDecimal volumenActual;
     public List<TiendaCargaResponse> tiendas;
 }

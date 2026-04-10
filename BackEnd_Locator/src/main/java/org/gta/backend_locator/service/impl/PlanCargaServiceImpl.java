@@ -1,10 +1,7 @@
 package org.gta.backend_locator.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.gta.backend_locator.dto.response.CamionResponse;
-import org.gta.backend_locator.dto.response.PlanCargaCamionResponse;
-import org.gta.backend_locator.dto.response.PlanCargaResponse;
-import org.gta.backend_locator.dto.response.PlanCargaTiendaResponse;
+import org.gta.backend_locator.dto.response.*;
 import org.gta.backend_locator.model.PlanCarga;
 import org.gta.backend_locator.model.PlanCargaCamion;
 import org.gta.backend_locator.model.PlanCargaCamionTienda;
@@ -20,6 +17,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -39,11 +37,300 @@ public class PlanCargaServiceImpl implements PlanCargaService {
     public PlanCargaResponse generarPlan(Long ventanaId) {
 
         String sql = """
+        SELECT tienda_id,
+               SUM(cantidad * peso_unitario_kg) AS peso_total,
+               SUM(cantidad * volumen_unitario_m3) AS volumen_total
+        FROM despacho_proceso dp
+        JOIN despacho_proceso_detalle dpd ON dp.id = dpd.despacho_id
+        WHERE dp.estado = 'EN_PROCESO'
+        GROUP BY tienda_id
+    """;
+
+        List<Map<String, Object>> demanda = jdbcTemplate.queryForList(sql);
+
+        PlanCarga plan = new PlanCarga();
+        plan.setVentanaId(ventanaId);
+        plan.setFecha(LocalDate.now());
+        plan.setEstado("GENERADO");
+        plan.setUsuarioCreacion("demo");
+        plan.setFechaCreacion(LocalDateTime.now());
+
+        plan = planRepo.save(plan);
+
+        // Conviene tenerlos ordenados de menor a mayor para elegir el más pequeño que sí quepa completo.
+        List<CamionConfig> tipos = List.of(
+                new CamionConfig("5T",  new BigDecimal("5000"),  new BigDecimal("30")),
+                new CamionConfig("10T", new BigDecimal("10000"), new BigDecimal("50")),
+                new CamionConfig("22T", new BigDecimal("22000"), new BigDecimal("70"))
+        );
+
+        List<PlanCargaCamion> camiones = new ArrayList<>();
+        List<PlanCargaCamionTienda> asignaciones = new ArrayList<>();
+
+        // Recomendable procesar de mayor a menor para empacar mejor.
+        demanda.sort((a, b) -> {
+            BigDecimal pesoA = toBigDecimal(a.get("peso_total"));
+            BigDecimal pesoB = toBigDecimal(b.get("peso_total"));
+            return pesoB.compareTo(pesoA);
+        });
+
+        for (Map<String, Object> row : demanda) {
+
+            Long tiendaId = ((Number) row.get("tienda_id")).longValue();
+            BigDecimal pesoPendiente = toBigDecimal(row.get("peso_total"));
+            BigDecimal volumenPendiente = toBigDecimal(row.get("volumen_total"));
+
+            while (esMayorQueCero(pesoPendiente) || esMayorQueCero(volumenPendiente)) {
+
+                boolean huboAsignacion = false;
+
+                // 1. Intentar asignar a camiones existentes
+                for (PlanCargaCamion camion : camiones) {
+
+                    BigDecimal disponiblePeso = camion.getCapacidadPeso().subtract(camion.getPesoActual());
+                    BigDecimal disponibleVolumen = camion.getCapacidadVolumen().subtract(camion.getVolumenActual());
+
+                    if (disponiblePeso.compareTo(BigDecimal.ZERO) <= 0 ||
+                            disponibleVolumen.compareTo(BigDecimal.ZERO) <= 0) {
+                        continue;
+                    }
+
+                    BigDecimal factorAsignacion = calcularFactorAsignacion(
+                            pesoPendiente,
+                            volumenPendiente,
+                            disponiblePeso,
+                            disponibleVolumen
+                    );
+
+                    if (factorAsignacion.compareTo(BigDecimal.ZERO) <= 0) {
+                        continue;
+                    }
+
+                    BigDecimal pesoAsignado = pesoPendiente.multiply(factorAsignacion)
+                            .setScale(4, RoundingMode.HALF_UP);
+                    BigDecimal volumenAsignado = volumenPendiente.multiply(factorAsignacion)
+                            .setScale(4, RoundingMode.HALF_UP);
+
+                    // Ajuste final por redondeo
+                    pesoAsignado = pesoAsignado.min(disponiblePeso).min(pesoPendiente);
+                    volumenAsignado = volumenAsignado.min(disponibleVolumen).min(volumenPendiente);
+
+                    if (!esMayorQueCero(pesoAsignado) && !esMayorQueCero(volumenAsignado)) {
+                        continue;
+                    }
+
+                    camion.setPesoActual(camion.getPesoActual().add(pesoAsignado));
+                    camion.setVolumenActual(camion.getVolumenActual().add(volumenAsignado));
+                    camionRepo.save(camion);
+
+                    PlanCargaCamionTienda ct = new PlanCargaCamionTienda();
+                    ct.setPlanCamionId(camion.getIdPlanCamion());
+                    ct.setTiendaId(tiendaId);
+                    ct.setPesoAsignado(pesoAsignado);
+                    ct.setVolumenAsignado(volumenAsignado);
+                    ct.setEstado("ACTIVO");
+                    ct.setUsuarioCreacion("demo");
+                    ct.setFechaCreacion(LocalDateTime.now());
+                    camionTiendaRepo.save(ct);
+
+                    asignaciones.add(ct);
+
+                    pesoPendiente = pesoPendiente.subtract(pesoAsignado).max(BigDecimal.ZERO);
+                    volumenPendiente = volumenPendiente.subtract(volumenAsignado).max(BigDecimal.ZERO);
+
+                    huboAsignacion = true;
+
+                    if (!esMayorQueCero(pesoPendiente) && !esMayorQueCero(volumenPendiente)) {
+                        break;
+                    }
+                }
+
+                if (!esMayorQueCero(pesoPendiente) && !esMayorQueCero(volumenPendiente)) {
+                    break;
+                }
+
+                // 2. Si no pudo asignarse a existentes, crear un camión nuevo
+                if (!huboAsignacion) {
+
+                    CamionConfig tipo = seleccionarTipoCamion(tipos, pesoPendiente, volumenPendiente);
+
+                    PlanCargaCamion nuevo = new PlanCargaCamion();
+                    nuevo.setPlanId(plan.getIdPlan());
+                    nuevo.setTipoCamion(tipo.tipo());
+                    nuevo.setCapacidadPeso(tipo.capacidadPeso());
+                    nuevo.setCapacidadVolumen(tipo.capacidadVolumen());
+                    nuevo.setPesoActual(BigDecimal.ZERO);
+                    nuevo.setVolumenActual(BigDecimal.ZERO);
+                    nuevo.setEstado("EN_CARGA");
+                    nuevo.setUsuarioCreacion("demo");
+                    nuevo.setFechaCreacion(LocalDateTime.now());
+
+                    nuevo = camionRepo.save(nuevo);
+                    camiones.add(nuevo);
+
+                    // Asignar lo máximo posible a ese camión nuevo
+                    BigDecimal factorAsignacion = calcularFactorAsignacion(
+                            pesoPendiente,
+                            volumenPendiente,
+                            nuevo.getCapacidadPeso(),
+                            nuevo.getCapacidadVolumen()
+                    );
+
+                    BigDecimal pesoAsignado = pesoPendiente.multiply(factorAsignacion)
+                            .setScale(4, RoundingMode.HALF_UP);
+                    BigDecimal volumenAsignado = volumenPendiente.multiply(factorAsignacion)
+                            .setScale(4, RoundingMode.HALF_UP);
+
+                    pesoAsignado = pesoAsignado.min(nuevo.getCapacidadPeso()).min(pesoPendiente);
+                    volumenAsignado = volumenAsignado.min(nuevo.getCapacidadVolumen()).min(volumenPendiente);
+
+                    nuevo.setPesoActual(pesoAsignado);
+                    nuevo.setVolumenActual(volumenAsignado);
+                    camionRepo.save(nuevo);
+
+                    PlanCargaCamionTienda ct = new PlanCargaCamionTienda();
+                    ct.setPlanCamionId(nuevo.getIdPlanCamion());
+                    ct.setTiendaId(tiendaId);
+                    ct.setPesoAsignado(pesoAsignado);
+                    ct.setVolumenAsignado(volumenAsignado);
+                    ct.setEstado("ACTIVO");
+                    ct.setUsuarioCreacion("demo");
+                    ct.setFechaCreacion(LocalDateTime.now());
+                    camionTiendaRepo.save(ct);
+
+                    asignaciones.add(ct);
+
+                    pesoPendiente = pesoPendiente.subtract(pesoAsignado).max(BigDecimal.ZERO);
+                    volumenPendiente = volumenPendiente.subtract(volumenAsignado).max(BigDecimal.ZERO);
+                }
+            }
+        }
+
+        // 3. Calcular ocupación final y estado
+        for (PlanCargaCamion c : camiones) {
+
+            BigDecimal porcentajePeso = dividirSeguro(c.getPesoActual(), c.getCapacidadPeso());
+            BigDecimal porcentajeVolumen = dividirSeguro(c.getVolumenActual(), c.getCapacidadVolumen());
+
+            BigDecimal ocupacion = porcentajePeso.max(porcentajeVolumen);
+
+            c.setPorcentajeOcupacion(ocupacion);
+            c.setEstado(
+                    ocupacion.compareTo(OCUPACION_MINIMA) >= 0
+                            ? "LISTO"
+                            : "PENDIENTE"
+            );
+
+            camionRepo.save(c);
+        }
+
+        // 4. Armar response
+        PlanCargaResponse response = new PlanCargaResponse();
+        response.planId = plan.getIdPlan();
+        response.camiones = camiones.stream()
+                .map(c -> {
+                    CamionResponse cr = new CamionResponse();
+                    cr.tipoCamion = c.getTipoCamion();
+                    cr.pesoActual = c.getPesoActual();
+                    cr.volumenActual = c.getVolumenActual();
+                    cr.porcentajeOcupacion = c.getPorcentajeOcupacion();
+
+                    cr.tiendas = asignaciones.stream()
+                            .filter(a -> a.getPlanCamionId().equals(c.getIdPlanCamion()))
+                            .map(a -> {
+                                TiendaCargaResponse tr = new TiendaCargaResponse();
+                                tr.tiendaId = a.getTiendaId();
+                                tr.pesoAsignado = a.getPesoAsignado();
+                                tr.volumenAsignado = a.getVolumenAsignado();
+                                return tr;
+                            })
+                            .toList();
+
+                    return cr;
+                })
+                .toList();
+
+        return response;
+    }
+
+    private CamionConfig seleccionarTipoCamion(List<CamionConfig> tipos,
+                                               BigDecimal pesoPendiente,
+                                               BigDecimal volumenPendiente) {
+
+        // Busca el camión más pequeño que pueda llevar TODO el remanente.
+        return tipos.stream()
+                .filter(t -> pesoPendiente.compareTo(t.capacidadPeso()) <= 0
+                        && volumenPendiente.compareTo(t.capacidadVolumen()) <= 0)
+                .min(Comparator.comparing(CamionConfig::capacidadPeso))
+                // Si ningún camión puede llevar todo el remanente, usar el mayor
+                // para partir la carga en varios camiones.
+                .orElse(tipos.stream()
+                        .max(Comparator.comparing(CamionConfig::capacidadPeso))
+                        .orElseThrow());
+    }
+
+    private BigDecimal calcularFactorAsignacion(BigDecimal pesoPendiente,
+                                                BigDecimal volumenPendiente,
+                                                BigDecimal capacidadDisponiblePeso,
+                                                BigDecimal capacidadDisponibleVolumen) {
+
+        boolean hayPeso = esMayorQueCero(pesoPendiente);
+        boolean hayVolumen = esMayorQueCero(volumenPendiente);
+
+        if (!hayPeso && !hayVolumen) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal factorPeso = BigDecimal.ONE;
+        BigDecimal factorVolumen = BigDecimal.ONE;
+
+        if (hayPeso) {
+            factorPeso = capacidadDisponiblePeso.divide(pesoPendiente, 8, RoundingMode.DOWN)
+                    .min(BigDecimal.ONE);
+        }
+
+        if (hayVolumen) {
+            factorVolumen = capacidadDisponibleVolumen.divide(volumenPendiente, 8, RoundingMode.DOWN)
+                    .min(BigDecimal.ONE);
+        }
+
+        return factorPeso.min(factorVolumen).max(BigDecimal.ZERO);
+    }
+
+    private BigDecimal dividirSeguro(BigDecimal numerador, BigDecimal denominador) {
+        if (denominador == null || denominador.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+        return numerador.divide(denominador, 4, RoundingMode.HALF_UP);
+    }
+
+    private boolean esMayorQueCero(BigDecimal valor) {
+        return valor != null && valor.compareTo(new BigDecimal("0.0001")) > 0;
+    }
+
+    private BigDecimal toBigDecimal(Object value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        if (value instanceof BigDecimal bd) {
+            return bd;
+        }
+        if (value instanceof Number n) {
+            return BigDecimal.valueOf(n.doubleValue());
+        }
+        return new BigDecimal(value.toString());
+    }
+
+    private record CamionConfig(String tipo, BigDecimal capacidadPeso, BigDecimal capacidadVolumen) {
+    }
+   /* public PlanCargaResponse generarPlan(Long ventanaId) {
+
+        String sql = """
             SELECT tienda_id,
                    SUM(cantidad * peso_unitario_kg) peso_total,
                    SUM(cantidad * volumen_unitario_m3) volumen_total
             FROM despacho_proceso dp
-            JOIN despacho_proceso_detalle dpd ON dp.id_despacho = dpd.despacho_id
+            JOIN despacho_proceso_detalle dpd ON dp.id = dpd.despacho_id
             WHERE dp.estado = 'EN_PROCESO'
             GROUP BY tienda_id
         """;
@@ -60,9 +347,9 @@ public class PlanCargaServiceImpl implements PlanCargaService {
         plan = planRepo.save(plan);
 
         List<CamionConfig> tipos = List.of(
-                new CamionConfig("22T", 22000),
-                new CamionConfig("10T", 10000),
-                new CamionConfig("5T", 5000)
+                new CamionConfig("22T", 22000, 70),
+                new CamionConfig("10T", 10000, 50),
+                new CamionConfig("5T", 5000, 30)
         );
 
         List<PlanCargaCamion> camiones = new ArrayList<>();
@@ -72,21 +359,25 @@ public class PlanCargaServiceImpl implements PlanCargaService {
 
             Long tiendaId = ((Number) row.get("tienda_id")).longValue();
             BigDecimal peso = (BigDecimal) row.get("peso_total");
+            BigDecimal volumen = (BigDecimal) row.get("volumen_total");
 
             boolean asignado = false;
 
             for (PlanCargaCamion camion : camiones) {
 
                 BigDecimal nuevoPeso = camion.getPesoActual().add(peso);
+                BigDecimal nuevoVolumen = camion.getVolumenActual().add(volumen);
 
                 if (nuevoPeso.compareTo(camion.getCapacidadPeso()) <= 0) {
 
                     camion.setPesoActual(nuevoPeso);
+                    camion.setVolumenActual(nuevoVolumen);
 
                     PlanCargaCamionTienda ct = new PlanCargaCamionTienda();
                     ct.setPlanCamionId(camion.getIdPlanCamion());
                     ct.setTiendaId(tiendaId);
                     ct.setPesoAsignado(peso);
+                    ct.setVolumenAsignado(volumen);
                     ct.setEstado("ACTIVO");
                     ct.setUsuarioCreacion("demo");
                     ct.setFechaCreacion(LocalDateTime.now());
@@ -110,6 +401,8 @@ public class PlanCargaServiceImpl implements PlanCargaService {
                 nuevo.setTipoCamion(tipo.tipo);
                 nuevo.setCapacidadPeso(BigDecimal.valueOf(tipo.capacidad));
                 nuevo.setPesoActual(peso);
+                nuevo.setCapacidadVolumen(BigDecimal.valueOf(tipo.volumen));
+                nuevo.setVolumenActual(volumen);
                 nuevo.setEstado("EN_CARGA");
                 nuevo.setUsuarioCreacion("demo");
                 nuevo.setFechaCreacion(LocalDateTime.now());
@@ -158,7 +451,7 @@ public class PlanCargaServiceImpl implements PlanCargaService {
 
         return response;
     }
-
+*/
     @Override
     public List<PlanCargaCamionResponse> getPlanes() {
         List<PlanCargaCamion> camiones = camionRepo.findAllByOrderByIdPlanCamionDesc();
@@ -204,7 +497,7 @@ public class PlanCargaServiceImpl implements PlanCargaService {
         return tiendas;
     }
 
-    private BigDecimal toBigDecimal(Object value) {
+ /*   private BigDecimal toBigDecimal(Object value) {
         if (value == null) {
             return BigDecimal.ZERO;
         }
@@ -215,6 +508,6 @@ public class PlanCargaServiceImpl implements PlanCargaService {
 
         return new BigDecimal(value.toString());
     }
-
-    private record CamionConfig(String tipo, int capacidad) {}
+*/
+ //   private record CamionConfig(String tipo, int capacidad, int volumen) {}
 }

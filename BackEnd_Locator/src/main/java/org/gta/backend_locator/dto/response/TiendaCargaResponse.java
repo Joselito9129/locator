@@ -13,5 +13,6 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class TiendaCargaResponse {
     public Long tiendaId;
-    public BigDecimal peso;
+    public BigDecimal pesoAsignado;
+    public BigDecimal volumenAsignado;
 }

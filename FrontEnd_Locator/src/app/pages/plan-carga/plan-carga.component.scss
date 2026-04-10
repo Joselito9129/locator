@@ -26,3 +26,50 @@
 .state-error {
   border-left: 4px solid #d32f2f;
 }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 18px;
+}
+
+
+
+.plan-carga__header-actions {
+  padding: 12px;
+  background: #f8f9fb;
+  border-radius: 8px;
+}
+
+
+.plan-carga__header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.plan-carga__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.plan-carga__select {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  min-width: 160px;
+  background: white;
+  font-size: 14px;
+}
+
+.state-box {
+  font-weight: 500;
+}

@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
-import { BehaviorSubject, catchError, map, of, shareReplay, startWith, switchMap, take } from 'rxjs';
+import { BehaviorSubject, catchError, map, of, shareReplay, startWith, switchMap } from 'rxjs';
 
 import { PlanCargaModel } from '../../models/plan-carga.model';
 import { PlanCargaService } from '../../service/services/plan-carga.service';
@@ -58,14 +58,23 @@ export class PlanCargaComponent implements OnInit {
     this.refresh$.next();
   }
 
+loadingGenerar$ = new BehaviorSubject<boolean>(false);
+
   generar(): void {
-    this.planCargaService.generarPlan(1).pipe(take(1)).subscribe({
+    
+    this.loadingGenerar$.next(true);
+
+    this.planCargaService.generarPlan(1)
+    .subscribe({
       next: () => {
+        console.log('respondio');
         this.refresh();
       },
       error: () => {
+        console.log('error');
         window.alert('No fue posible generar el plan.');
-      }
+      },
+      complete: () => this.loadingGenerar$.next(false)
     });
   }
 

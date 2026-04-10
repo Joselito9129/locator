@@ -2,10 +2,36 @@
   <div class="page-header">
     <h2>Planificación de carga</h2>
 
-    <div class="plan-carga__header-actions">
-      <button type="button" class="btn-theme" (click)="refresh()">Refrescar</button>
-      <button type="button" class="btn-theme" (click)="generar()">Generar plan</button>
-    </div>
+<div class="plan-carga__header-actions">
+
+  <div class="state-box">
+    Seleccione ruta a procesar.
+  </div>
+
+  <div class="plan-carga__controls">
+
+    <select class="plan-carga__select">
+      <option>Ruta 01</option>
+      <option>Ruta 02</option>
+      <option>Ruta 03</option>
+      <option>Ruta 04</option>
+    </select>
+
+    <button type="button" class="btn-theme" (click)="refresh()">
+      Refrescar
+    </button>
+
+    <button type="button" class="btn-theme" (click)="generar()">
+      Generar plan
+    </button>
+
+  </div>
+</div>
+
+
+  <div class="overlay" *ngIf="loadingGenerar$ | async">
+    <div class="spinner"></div>
+    Generando plan...
   </div>
 
   <div class="card-theme">

@@ -5,6 +5,8 @@ export interface RutaGeoEntity {
   latitudDestino: number;
   longitudDestino: number;
   estado: string;
+  etaactual: string;
+  etainicio: string;
   usuarioCreacion: string;
   fechaCreacion: string;
   guia: string;

@@ -13,6 +13,8 @@ public interface RutaGeoMapper {
     @Mapping(target = "fechaCreacion", ignore = true)
     RutaGeo toEntity(RutaGeoRequest request);
 
+    @Mapping(target = "etainicio", expression = "java(java.time.LocalDateTime.now())")
+    @Mapping(target = "etaactual", expression = "java(java.time.LocalDateTime.now().plusMinutes(30))")
     RutaGeoResponse toResponse(RutaGeo entity);
 
 }
