@@ -36,13 +36,14 @@ public class PlanCargaServiceImpl implements PlanCargaService {
         String sql = """
         SELECT dp.tienda_id,
                t.recibe_tonelaje,
+               t.ruta,
                SUM(dpd.cantidad * dpd.peso_unitario_kg) AS peso_total,
                SUM(dpd.cantidad * dpd.volumen_unitario_m3) AS volumen_total
         FROM despacho_proceso dp
         JOIN despacho_proceso_detalle dpd ON dp.id = dpd.despacho_id
         JOIN tienda t ON t.id = dp.tienda_id
         WHERE dp.estado = 'EN_PROCESO'
-        GROUP BY dp.tienda_id, t.recibe_tonelaje
+        GROUP BY dp.tienda_id, t.recibe_tonelaje, t.ruta
     """;
 
         List<Map<String, Object>> demanda = jdbcTemplate.queryForList(sql);
@@ -65,6 +66,10 @@ public class PlanCargaServiceImpl implements PlanCargaService {
         List<PlanCargaCamion> camiones = new ArrayList<>();
         List<PlanCargaCamionTienda> asignaciones = new ArrayList<>();
 
+        // Temporal: mapa en memoria para saber la ruta del camión.
+        // Recomendado después persistirlo en plan_carga_camion.
+        Map<Long, String> rutaPorCamion = new HashMap<>();
+
         demanda.sort((a, b) -> {
             BigDecimal pesoA = toBigDecimal(a.get("peso_total"));
             BigDecimal pesoB = toBigDecimal(b.get("peso_total"));
@@ -81,6 +86,10 @@ public class PlanCargaServiceImpl implements PlanCargaService {
                     ? row.get("recibe_tonelaje").toString()
                     : null;
 
+            String rutaTienda = row.get("ruta") != null
+                    ? row.get("ruta").toString().trim()
+                    : null;
+
             Set<String> tiposPermitidos = parsearTiposPermitidos(recibeTonelaje);
 
             if (tiposPermitidos.isEmpty()) {
@@ -89,12 +98,24 @@ public class PlanCargaServiceImpl implements PlanCargaService {
                 );
             }
 
+            if (rutaTienda == null || rutaTienda.isBlank()) {
+                throw new IllegalStateException(
+                        "La tienda " + tiendaId + " no tiene ruta configurada."
+                );
+            }
+
             while (esMayorQueCero(pesoPendiente) || esMayorQueCero(volumenPendiente)) {
 
                 boolean huboAsignacion = false;
 
-                // 1. Intentar asignar a camiones existentes válidos para la tienda
+                // 1. Intentar asignar a camiones existentes válidos
                 for (PlanCargaCamion camion : camiones) {
+
+                    String rutaCamion = rutaPorCamion.get(camion.getIdPlanCamion());
+
+                    if (!mismaRuta(rutaCamion, rutaTienda)) {
+                        continue;
+                    }
 
                     if (!tiposPermitidos.contains(normalizarTipoCamion(camion.getTipoCamion()))) {
                         continue;
@@ -138,6 +159,7 @@ public class PlanCargaServiceImpl implements PlanCargaService {
                     PlanCargaCamionTienda ct = new PlanCargaCamionTienda();
                     ct.setPlanCamionId(camion.getIdPlanCamion());
                     ct.setTiendaId(tiendaId);
+                    ct.setRuta(Long.valueOf(rutaTienda));
                     ct.setPesoAsignado(pesoAsignado);
                     ct.setVolumenAsignado(volumenAsignado);
                     ct.setEstado("ACTIVO");
@@ -162,9 +184,15 @@ public class PlanCargaServiceImpl implements PlanCargaService {
                 }
 
                 // 2. Crear camión nuevo solo con tonelajes permitidos para la tienda
+                //    y asociarlo a la ruta de la tienda
                 if (!huboAsignacion) {
 
-                    CamionConfig tipo = seleccionarTipoCamion(tipos, tiposPermitidos, pesoPendiente, volumenPendiente);
+                    CamionConfig tipo = seleccionarTipoCamion(
+                            tipos,
+                            tiposPermitidos,
+                            pesoPendiente,
+                            volumenPendiente
+                    );
 
                     PlanCargaCamion nuevo = new PlanCargaCamion();
                     nuevo.setPlanId(plan.getIdPlan());
@@ -177,8 +205,12 @@ public class PlanCargaServiceImpl implements PlanCargaService {
                     nuevo.setUsuarioCreacion("demo");
                     nuevo.setFechaCreacion(LocalDateTime.now());
 
+                    // Si agregas campo ruta en la entidad:
+                    // nuevo.setRuta(rutaTienda);
+
                     nuevo = camionRepo.save(nuevo);
                     camiones.add(nuevo);
+                    rutaPorCamion.put(nuevo.getIdPlanCamion(), rutaTienda);
 
                     BigDecimal factorAsignacion = calcularFactorAsignacion(
                             pesoPendiente,
@@ -198,7 +230,8 @@ public class PlanCargaServiceImpl implements PlanCargaService {
                     if (!esMayorQueCero(pesoAsignado) && !esMayorQueCero(volumenAsignado)) {
                         throw new IllegalStateException(
                                 "No fue posible asignar carga para la tienda " + tiendaId +
-                                        " con los tonelajes permitidos: " + tiposPermitidos
+                                        " con tonelajes permitidos " + tiposPermitidos +
+                                        " y ruta " + rutaTienda
                         );
                     }
 
@@ -211,6 +244,7 @@ public class PlanCargaServiceImpl implements PlanCargaService {
                     ct.setTiendaId(tiendaId);
                     ct.setPesoAsignado(pesoAsignado);
                     ct.setVolumenAsignado(volumenAsignado);
+                    ct.setRuta(Long.valueOf(rutaTienda));
                     ct.setEstado("ACTIVO");
                     ct.setUsuarioCreacion("demo");
                     ct.setFechaCreacion(LocalDateTime.now());
@@ -251,6 +285,9 @@ public class PlanCargaServiceImpl implements PlanCargaService {
                     cr.volumenActual = c.getVolumenActual();
                     cr.porcentajeOcupacion = c.getPorcentajeOcupacion();
 
+                    // si luego agregas ruta al response:
+                    // cr.ruta = rutaPorCamion.get(c.getIdPlanCamion());
+
                     cr.tiendas = asignaciones.stream()
                             .filter(a -> a.getPlanCamionId().equals(c.getIdPlanCamion()))
                             .map(a -> {
@@ -267,6 +304,16 @@ public class PlanCargaServiceImpl implements PlanCargaService {
                 .toList();
 
         return response;
+    }
+
+    private boolean mismaRuta(String rutaCamion, String rutaTienda) {
+        if (rutaCamion == null || rutaCamion.isBlank()) {
+            return false;
+        }
+        if (rutaTienda == null || rutaTienda.isBlank()) {
+            return false;
+        }
+        return rutaCamion.trim().equalsIgnoreCase(rutaTienda.trim());
     }
 
     private CamionConfig seleccionarTipoCamion(List<CamionConfig> tipos,
@@ -427,6 +474,7 @@ public class PlanCargaServiceImpl implements PlanCargaService {
         for (PlanCargaCamionTienda relacion : relaciones) {
             PlanCargaTiendaResponse item = new PlanCargaTiendaResponse();
             item.setTiendaId(relacion.getTiendaId());
+            item.setRuta(relacion.getRuta());
             item.setPesoAsignado(relacion.getPesoAsignado());
             item.setVolumenAsignado(relacion.getVolumenAsignado());
             tiendas.add(item);
@@ -434,18 +482,4 @@ public class PlanCargaServiceImpl implements PlanCargaService {
 
         return tiendas;
     }
-
- /*   private BigDecimal toBigDecimal(Object value) {
-        if (value == null) {
-            return BigDecimal.ZERO;
-        }
-
-        if (value instanceof BigDecimal bigDecimal) {
-            return bigDecimal;
-        }
-
-        return new BigDecimal(value.toString());
-    }
-*/
- //   private record CamionConfig(String tipo, int capacidad, int volumen) {}
 }

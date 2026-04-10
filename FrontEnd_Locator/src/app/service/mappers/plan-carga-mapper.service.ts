@@ -31,6 +31,7 @@ export class PlanCargaMapperService {
   private mapTiendas(entities: PlanCargaTiendaResponse[]): PlanCargaTiendaModel[] {
     return entities.map((item) => ({
       tiendaId: item.tiendaId,
+      ruta: item.ruta,
       pesoAsignado: item.pesoAsignado,
       volumenAsignado: item.volumenAsignado
     }));

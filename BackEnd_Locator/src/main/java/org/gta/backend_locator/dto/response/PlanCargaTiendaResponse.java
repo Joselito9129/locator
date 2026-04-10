@@ -14,6 +14,7 @@ import lombok.Setter;
 public class PlanCargaTiendaResponse {
 
     private Long tiendaId;
+    private Long ruta;
     private BigDecimal pesoAsignado;
     private BigDecimal volumenAsignado;
 }

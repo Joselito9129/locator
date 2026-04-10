@@ -103,6 +103,7 @@
                               <thead>
                                 <tr>
                                   <th>Tienda</th>
+                                  <th>Ruta</th>
                                   <th>Peso asignado</th>
                                   <th>Volumen asignado</th>
                                 </tr>
@@ -111,6 +112,7 @@
                                 @for (tienda of item.tiendas; track trackByTienda($index, tienda)) {
                                   <tr>
                                     <td>{{ tienda.tiendaId }}</td>
+                                    <td>{{ tienda.ruta }}</td>
                                     <td>{{ tienda.pesoAsignado }}</td>
                                     <td>{{ tienda.volumenAsignado ?? '-' }}</td>
                                   </tr>

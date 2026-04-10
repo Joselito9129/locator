@@ -1,12 +1,13 @@
 export interface PlanCargaTiendaResponse {
   tiendaId: number;
+  ruta: number;
   pesoAsignado: number;
   volumenAsignado: number | null;
 }
 
 export interface PlanCargaResponse {
   idPlanCamion: number;
-  planId: number;
+  planId: number;  
   tipoCamion: string;
   capacidadPeso: number;
   capacidadVolumen: number | null;

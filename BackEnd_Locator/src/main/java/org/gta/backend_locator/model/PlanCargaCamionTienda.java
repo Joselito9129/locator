@@ -17,18 +17,14 @@ public class PlanCargaCamionTienda {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idPlanCamionTienda;
-
     private Long planCamionId;
     private Long tiendaId;
-
+    private Long ruta;
     private BigDecimal pesoAsignado;
     private BigDecimal volumenAsignado;
-
     private String estado;
-
     private String usuarioCreacion;
     private LocalDateTime fechaCreacion;
-
     private String usuarioActualizacion;
     private LocalDateTime fechaActualizacion;
 }

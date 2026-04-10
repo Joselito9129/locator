@@ -1,5 +1,6 @@
 export interface PlanCargaTiendaModel {
   tiendaId: number;
+  ruta: number;
   pesoAsignado: number;
   volumenAsignado: number | null;
 }
