@@ -36,8 +36,23 @@ services:
     networks:
       - gta-net
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gta-frontend
+    ports:
+      - "4200:80"
+    environment:
+      - API_URL=http://backend:8080/api
+    depends_on:
+      - backend
+    networks:
+      - gta-net
+
 volumes:
   db-data:
 
 networks:
   gta-net:
+    driver: bridge
