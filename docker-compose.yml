@@ -38,7 +38,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./FrontEnd_Locator
       dockerfile: Dockerfile
     container_name: gta-frontend
     ports:
